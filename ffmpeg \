@@ -1,0 +1,20 @@
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" -f mpegts -codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 http://localhost:8081/supersecret
+
+
+ffmpeg -f avfoundation -video_size 1280x720 -framerate 30 -i "0:0" -f mpegts -codec:v mpeg1video -s 1280x720 -b:v 1000k -bf 0 http://localhost:8081/supersecret
+
+
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" out.avi
+
+
+ffmpeg -f avfoundation -list_devices true -i ""
+
+
+
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -pixel_format yuyv422 -i "0" out.avi
+
+
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0" -vcodec libx264 -preset veryfast -f flv http://localhost:8081/supersecret
+
+
+ffmpeg -f avfoundation -video_size 1920x1080 -framerate 30 -i "0" -vcodec libx264 -preset veryfast -f flv rtmp://localhost:8081/hls/test
