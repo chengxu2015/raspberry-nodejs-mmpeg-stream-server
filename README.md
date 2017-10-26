@@ -1,4 +1,46 @@
+## INSTALL H264 SUPPORT
+
+cd /usr/src  
+git clone git://git.videolan.org/x264  
+cd x264   
+./configure \
+--enable-shared \
+--enable-static \
+--enable-strip \
+--disable-cli  
+
+sudo make -j4  
+sudo make install  
+sudo make clean  
+sudo make distclean  
+
 # JSMpeg – MPEG1 Video & MP2 Audio Decoder in JavaScript
+
+## INSTALL FFMPEG
+cd /usr/src
+git clone https://github.com/FFmpeg/FFmpeg.git
+cd ffmpeg
+sudo ./configure --arch=armel --target-os=linux --enable-gpl --enable-libx264 --enable-nonfree --enable-shared  
+sudo make -j4  
+sudo make install  
+sudo make distclean  
+
+It may take more than half an hour  
+
+add /usr/local/ffmpeg/lib into /etc/ld.so.conf  
+
+add export PATH="/usr/local/ffmpeg/bin:$PATH" into /etc/profile  
+
+### list device
+ffmpeg -f avfoundation -list_devices true -i ""  
+(This command is for Mac)
+
+### take a video
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" out.avi  
+(This command is for Mac)  
+
+"0:0" "your camera : you microphone"
+
 
 JSMpeg is a Video Player written in JavaScript. It consists of an MPEG-TS demuxer, MPEG1 video & MP2 audio decoders, WebGL & Canvas2D renderers and WebAudio sound output. JSMpeg can load static videos via Ajax and allows low latency streaming (~50ms) via WebSockets.
 
@@ -193,45 +235,5 @@ ffmpeg \
 
 Note the `muxdelay` argument. This should reduce lag, but doesn't always work when streaming video and audio - see remarks below.
 
-
-## Some remarks about ffmpeg muxing and latency
-
-Adding an audio stream to the MPEG-TS can sometimes introduce considerable latency. I especially found this to be a problem on linux using ALSA and V4L2 (using AVFoundation on macOS worked just fine). However, there is a simple workaround: just run two instances of ffmpeg in parallel. One for audio, one for video. Send both outputs to the same Websocket relay. Thanks to the simplicity of the MPEG-TS format, proper "muxing" of the two streams happens automatically in the relay.
-
-```
-ffmpeg \
-	-f v4l2 \
-		-framerate 25 -video_size 640x480 -i /dev/video0 \
-	-f mpegts \
-		-codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 \
-		-muxdelay 0.001 \
-	http://localhost:8081/supersecret
-
-# In a second terminal
-ffmpeg \
-	-f alsa \
-		-ar 44100 -c 2 -i hw:0 \
-	-f mpegts \
-		-codec:a mp2 -b:a 128k \
-		-muxdelay 0.001 \
-	http://localhost:8081/supersecret
-```
-In my tests, USB Webcams introduce about ~180ms of latency and there seems to be nothing we can do about it. The Raspberry Pi however has a [camera module](https://www.raspberrypi.org/products/camera-module-v2/) that provides lower latency video capture.
-
-To capture webcam input on Windows or macOS using ffmpeg, see the [ffmpeg Capture/Webcam Wiki](https://trac.ffmpeg.org/wiki/Capture/Webcam).
-
-
-## JSMpeg Architecture and Internals
-
-This library was built in a fairly modular fashion while keeping overhead at a minimum. Implementing new Demuxers, Decoders, Outputs (Renderers, Audio Devices) or Sources should be possible without changing any other parts. However, you would still need to subclass the `JSMpeg.Player` in order to use any new modules.
-
-Have a look a the [jsmpeg.js source](https://github.com/phoboslab/jsmpeg/blob/master/src/jsmpeg.js) for an overview of how the modules interconnect and what APIs they should provide. I also wrote a blog post about some of JSMpeg's internals: [Decode It Like It's 1999](http://phoboslab.org/log/2017/02/decode-it-like-its-1999).
-
-Using parts of the library without creating a full player should also be fairly straightforward. E.g. you can create a stand-alone instance of the `JSMpeg.Decoder.MPEG1Video` class, `.connect()` a renderer, `.write()` some data to it and `.decode()` a frame, without touching JSMpeg's other parts.
-
-
-## Previous Version
-
-The JSMpeg version currently living in this repo is a complete rewrite of the original jsmpeg library that was just able to decode raw mpeg1video. If you're looking for the old version, see the [v0.2 tag](https://github.com/phoboslab/jsmpeg/releases/tag/v0.2).
-
-
+## start rtmp server  
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" -vcodec libx264 -preset veryfast -f flv rtmp://localhost:1935/hls/movie
