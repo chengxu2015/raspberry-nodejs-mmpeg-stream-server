@@ -1,25 +1,24 @@
-## INSTALL H264 SUPPORT
+# Raspberry Pi Live Webcam
 
+For this example, ffmpeg and the WebSocket relay run on the same system. This allows you to view the stream in your local network, but not on the public internet.
+
+This example assumes that your webcam is compatible with Video4Linux2 and appears as `/dev/video0` in the filesystem. Most USB webcams support the UVC standard and should work just fine. The onboard Raspberry Camera can be made available as V4L2 device by loading a kernel module: `sudo modprobe bcm2835-v4l2`.
+
+
+1) Install ffmpeg  
 cd /usr/src  
 git clone git://git.videolan.org/x264  
 cd x264   
-./configure \
---enable-shared \
---enable-static \
---enable-strip \
---disable-cli  
+./configure --enable-shared --enable-static --enable-strip --disable-cli  
 
 sudo make -j4  
 sudo make install  
 sudo make clean  
-sudo make distclean  
+sudo make distclean 
 
-# JSMpeg – MPEG1 Video & MP2 Audio Decoder in JavaScript
-
-## INSTALL FFMPEG
-cd /usr/src
-git clone https://github.com/FFmpeg/FFmpeg.git
-cd ffmpeg
+cd /usr/src  
+git clone https://github.com/FFmpeg/FFmpeg.git  
+cd ffmpeg  
 sudo ./configure --arch=armel --target-os=linux --enable-gpl --enable-libx264 --enable-nonfree --enable-shared  
 sudo make -j4  
 sudo make install  
@@ -31,6 +30,77 @@ add /usr/local/ffmpeg/lib into /etc/ld.so.conf
 
 add export PATH="/usr/local/ffmpeg/bin:$PATH" into /etc/profile  
 
+ffmpeg -version
+If you get some information of version, you install ffmpeg successfully 
+
+
+2) Install Node.js and npm (See [Installing Node.js on Debian and Ubuntu based Linux distributions](https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions) for newer versions). The Websocket relay is written in Node.js
+
+3) Install http-server. We will use this to serve the static files (view-stream.html, jsmpeg.min.js), so that we can view the website with the video in our browser. Any other webserver would work as well (nginx, apache, etc.):
+`sudo npm -g install http-server`
+
+4) Install git and clone this repository (or just download it as ZIP and unpack)
+```
+sudo apt-get install git
+git clone https://github.com/phoboslab/jsmpeg.git
+```
+
+5) Change into the jsmpeg/ directory
+`cd jsmpeg/`
+
+6) Install the Node.js Websocket Library:
+`npm install ws`
+
+7) Start the Websocket relay. Provide a password and a port for the incomming HTTP video stream and a Websocket port that we can connect to in the browser:
+`node websocket-relay.js supersecret 8081 8082`
+
+8) In a new terminal window (still in the `jsmpeg/` directory, start the `http-server` so we can serve the view-stream.html to the browser:
+`http-server`
+
+9) Open the streaming website in your browser. The `http-server` will tell you the ip (usually `192.168.[...]`) and port (usually `8080`) where it's running on:
+`http://192.168.[...]:8080/view-stream.html`
+
+10) In a third terminal window, start ffmpeg to capture the webcam video and send it to the Websocket relay. Provide the password and port (from step 7) in the destination URL:
+```
+ffmpeg \
+	-f v4l2 \
+		-framerate 25 -video_size 640x480 -i /dev/video0 \
+	-f mpegts \
+		-codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 \
+	http://localhost:8081/supersecret
+```
+
+You should now see a live webcam image in your browser. 
+
+If ffmpeg failed to open the input video, it's likely that your webcam does not support the given resolution, format or framerate. To get a list of compatible modes run:
+
+`ffmpeg -f v4l2 -list_formats all -i /dev/video0`
+
+
+To add the webcam audio, just call ffmpeg with two separate inputs.
+
+```
+ffmpeg \
+	-f v4l2 \
+		-framerate 25 -video_size 640x480 -i /dev/video0 \
+	-f alsa \
+		-ar 44100 -c 2 -i hw:0 \
+	-f mpegts \
+		-codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 \
+		-codec:a mp2 -b:a 128k \
+		-muxdelay 0.001 \
+	http://localhost:8081/supersecret
+```
+
+Note the `muxdelay` argument. This should reduce lag, but doesn't always work when streaming video and audio - see remarks below.
+
+## start rtmp server  
+ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" -vcodec libx264 -preset veryfast -f flv rtmp://localhost:1935/hls/movie
+
+
+# JSMpeg – MPEG1 Video & MP2 Audio Decoder in JavaScript
+ 
+
 ### list device
 ffmpeg -f avfoundation -list_devices true -i ""  
 (This command is for Mac)
@@ -39,7 +109,7 @@ ffmpeg -f avfoundation -list_devices true -i ""
 ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" out.avi  
 (This command is for Mac)  
 
-"0:0" "your camera : you microphone"
+"0:0" : "your camera : you microphone"
 
 
 JSMpeg is a Video Player written in JavaScript. It consists of an MPEG-TS demuxer, MPEG1 video & MP2 audio decoders, WebGL & Canvas2D renderers and WebAudio sound output. JSMpeg can load static videos via Ajax and allows low latency streaming (~50ms) via WebSockets.
@@ -166,74 +236,3 @@ In short, it works like this:
 3. connect JSMpeg in the browser to the relay's Websocket port
 
 
-## Example Setup for Streaming: Raspberry Pi Live Webcam
-
-For this example, ffmpeg and the WebSocket relay run on the same system. This allows you to view the stream in your local network, but not on the public internet.
-
-This example assumes that your webcam is compatible with Video4Linux2 and appears as `/dev/video0` in the filesystem. Most USB webcams support the UVC standard and should work just fine. The onboard Raspberry Camera can be made available as V4L2 device by loading a kernel module: `sudo modprobe bcm2835-v4l2`.
-
-
-1) Install ffmpeg (See [How to install ffmpeg on Debian / Raspbian](http://superuser.com/questions/286675/how-to-install-ffmpeg-on-debian)). Using ffmpeg, we can capture the webcam video & audio and encode it into MPEG1/MP2.
-
-2) Install Node.js and npm (See [Installing Node.js on Debian and Ubuntu based Linux distributions](https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions) for newer versions). The Websocket relay is written in Node.js
-
-3) Install http-server. We will use this to serve the static files (view-stream.html, jsmpeg.min.js), so that we can view the website with the video in our browser. Any other webserver would work as well (nginx, apache, etc.):
-`sudo npm -g install http-server`
-
-4) Install git and clone this repository (or just download it as ZIP and unpack)
-```
-sudo apt-get install git
-git clone https://github.com/phoboslab/jsmpeg.git
-```
-
-5) Change into the jsmpeg/ directory
-`cd jsmpeg/`
-
-6) Install the Node.js Websocket Library:
-`npm install ws`
-
-7) Start the Websocket relay. Provide a password and a port for the incomming HTTP video stream and a Websocket port that we can connect to in the browser:
-`node websocket-relay.js supersecret 8081 8082`
-
-8) In a new terminal window (still in the `jsmpeg/` directory, start the `http-server` so we can serve the view-stream.html to the browser:
-`http-server`
-
-9) Open the streaming website in your browser. The `http-server` will tell you the ip (usually `192.168.[...]`) and port (usually `8080`) where it's running on:
-`http://192.168.[...]:8080/view-stream.html`
-
-10) In a third terminal window, start ffmpeg to capture the webcam video and send it to the Websocket relay. Provide the password and port (from step 7) in the destination URL:
-```
-ffmpeg \
-	-f v4l2 \
-		-framerate 25 -video_size 640x480 -i /dev/video0 \
-	-f mpegts \
-		-codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 \
-	http://localhost:8081/supersecret
-```
-
-You should now see a live webcam image in your browser. 
-
-If ffmpeg failed to open the input video, it's likely that your webcam does not support the given resolution, format or framerate. To get a list of compatible modes run:
-
-`ffmpeg -f v4l2 -list_formats all -i /dev/video0`
-
-
-To add the webcam audio, just call ffmpeg with two separate inputs.
-
-```
-ffmpeg \
-	-f v4l2 \
-		-framerate 25 -video_size 640x480 -i /dev/video0 \
-	-f alsa \
-		-ar 44100 -c 2 -i hw:0 \
-	-f mpegts \
-		-codec:v mpeg1video -s 640x480 -b:v 1000k -bf 0 \
-		-codec:a mp2 -b:a 128k \
-		-muxdelay 0.001 \
-	http://localhost:8081/supersecret
-```
-
-Note the `muxdelay` argument. This should reduce lag, but doesn't always work when streaming video and audio - see remarks below.
-
-## start rtmp server  
-ffmpeg -f avfoundation -video_size 640x480 -framerate 30 -i "0:0" -vcodec libx264 -preset veryfast -f flv rtmp://localhost:1935/hls/movie
